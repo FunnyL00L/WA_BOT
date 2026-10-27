@@ -1,0 +1,21 @@
+{
+  "name": "wa-bot-standalone",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "dotenv": "^18.0.9",
+    "groq-sdk": "^1.6.0",
+    "pino": "^10.4.0",
+    "qrcode-terminal": "^0.12.0",
+    "tesseract.js": "^7.0.0"
+  }
+}
