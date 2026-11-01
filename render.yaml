@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: wa-bot-standalone
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run start
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production

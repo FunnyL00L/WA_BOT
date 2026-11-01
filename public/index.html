@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WA Bot, Scheduler & Supabase Engine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .chat-bg {
+      background-color: #0f172a;
+      background-image: radial-gradient(#1e293b 1px, transparent 1px);
+      background-size: 16px 16px;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Header -->
+  <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl font-bold border border-emerald-500/30">
+          <i class="fa-brands fa-whatsapp"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg text-white leading-tight">WA Bot, Scheduler & Supabase</h1>
+          <p class="text-xs text-slate-400 flex items-center gap-2">
+            <span>Render Deploy Ready</span>
+            <span class="text-slate-600">•</span>
+            <span id="model-badge" class="text-emerald-400 font-mono">Loading model...</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- Status Badge -->
+        <div id="status-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-700 text-slate-300 text-xs font-medium border border-slate-600">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+          <span id="status-text">Mengecek koneksi...</span>
+        </div>
+
+        <button onclick="fetchStatus()" class="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition" title="Refresh Status">
+          <i class="fa-solid fa-arrows-rotate"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
+
+    <!-- WhatsApp Pairing & Connection Card -->
+    <div id="wa-connect-card" class="bg-slate-800 border border-emerald-500/30 rounded-2xl p-6 shadow-xl space-y-6">
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-700 pb-4">
+        <div>
+          <h2 class="text-lg font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-link text-emerald-400"></i>
+            <span>Menghubungkan WhatsApp ke Bot</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">Pilih metode penautan menggunakan <b>Kode Pairing OTP</b> (HP Android) atau <b>Scan Kode QR</b>.</p>
+        </div>
+
+        <div class="flex bg-slate-900 p-1 rounded-xl border border-slate-700">
+          <button onclick="setConnectMethod('otp')" id="btn-method-otp" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white transition">
+            <i class="fa-solid fa-key mr-1"></i> Kode Pairing OTP
+          </button>
+          <button onclick="setConnectMethod('qr')" id="btn-method-qr" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition">
+            <i class="fa-solid fa-qrcode mr-1"></i> Scan Kode QR
+          </button>
+        </div>
+      </div>
+
+      <!-- Option A: OTP Pairing Code -->
+      <div id="method-otp-section" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="space-y-4">
+          <label class="block text-xs font-semibold text-slate-300">Nomor WhatsApp HP Android (Format Internasional)</label>
+          <div class="flex gap-2">
+            <input type="text" id="phone-number-input" placeholder="Contoh: 628123456789" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 font-mono">
+            <button onclick="requestPairingOTP()" id="btn-request-otp" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm rounded-xl transition flex items-center gap-2 whitespace-nowrap">
+              <span>Minta Kode OTP</span>
+              <i class="fa-solid fa-paper-plane"></i>
+            </button>
+          </div>
+          <div class="flex items-center justify-between text-[11px] text-slate-400">
+            <span>Gunakan awalan 62 (misal 628123456789) tanpa spasi.</span>
+            <button onclick="resetWASession()" type="button" class="text-rose-400 hover:text-rose-300 underline text-[11px]">
+              <i class="fa-solid fa-rotate-left mr-1"></i>Reset Sesi WA
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 flex flex-col items-center justify-center text-center space-y-3">
+          <span class="text-xs text-slate-400 font-medium">KODE PAIRING OTP ANDA:</span>
+          <div id="otp-display" class="font-mono text-3xl font-extrabold text-emerald-400 tracking-widest bg-slate-800 px-6 py-2.5 rounded-xl border border-emerald-500/40 shadow">
+            ---- ----
+          </div>
+          <p class="text-xs text-slate-300 max-w-sm">
+            Buka WA di Ponsel &rarr; <b>Perangkat Tertaut</b> &rarr; <b>Tautkan Perangkat</b> &rarr; Pilih <b>"Tautkan dengan nomor telepon saja"</b> lalu masukkan kode 8 digit di atas.
+          </p>
+        </div>
+      </div>
+
+      <!-- Option B: QR Code Scan -->
+      <div id="method-qr-section" class="hidden flex flex-col md:flex-row items-center justify-center gap-6 py-4">
+        <div id="qr-container" class="bg-white p-3 rounded-xl border border-emerald-400/30 shadow-lg flex items-center justify-center">
+          <div class="w-44 h-44 bg-slate-200 animate-pulse rounded flex items-center justify-center text-slate-500 text-xs">Menunggu QR Code...</div>
+        </div>
+        <div class="text-center md:text-left space-y-2 max-w-md">
+          <span class="px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-300 text-xs font-semibold uppercase tracking-wider">Scan Kamera</span>
+          <h3 class="text-base font-bold text-white">Scan Kode QR via WhatsApp</h3>
+          <p class="text-xs text-slate-300">
+            Arahkan kamera ponsel WhatsApp ke QR Code di samping untuk segera mengizinkan akses koneksi bot.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex border-b border-slate-700 gap-2 overflow-x-auto pb-1">
+      <button onclick="switchTab('simulator')" id="tab-btn-simulator" class="tab-btn active px-4 py-3 font-semibold text-sm border-b-2 border-emerald-400 text-emerald-400 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-comments"></i>
+        <span>WA Chat Simulator & OCR</span>
+      </button>
+
+      <button onclick="switchTab('scheduler')" id="tab-btn-scheduler" class="tab-btn px-4 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-clock"></i>
+        <span>Pesan Harian Otomatis</span>
+      </button>
+
+      <button onclick="switchTab('dataset')" id="tab-btn-dataset" class="tab-btn px-4 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-database"></i>
+        <span>Dataset & Pengetahuan</span>
+      </button>
+
+      <button onclick="switchTab('expenses')" id="tab-btn-expenses" class="tab-btn px-4 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-receipt"></i>
+        <span>Pengeluaran & Nota</span>
+        <span id="expense-count-badge" class="px-2 py-0.5 rounded-full text-xs bg-slate-800 text-slate-300">0</span>
+      </button>
+
+      <button onclick="switchTab('config')" id="tab-btn-config" class="tab-btn px-4 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-cloud"></i>
+        <span>Supabase & API Keys</span>
+      </button>
+
+      <button onclick="switchTab('render')" id="tab-btn-render" class="tab-btn px-4 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-rocket text-amber-400"></i>
+        <span>Deploy Ke Render</span>
+      </button>
+    </div>
+
+    <!-- Tab Content 1: WA Simulator -->
+    <div id="tab-simulator" class="tab-content flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-2xl flex flex-col h-[600px] overflow-hidden shadow-xl">
+        <div class="bg-slate-850 px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-lg">
+              <i class="fa-solid fa-robot"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-sm text-white">Bot Asisten WhatsApp</h3>
+              <p class="text-xs text-emerald-400 font-medium" id="typing-indicator">Online</p>
+            </div>
+          </div>
+          <button onclick="clearChatLog()" class="text-slate-400 hover:text-slate-200 text-xs px-2.5 py-1 rounded bg-slate-700 transition">
+            Bersihkan Chat
+          </button>
+        </div>
+
+        <div id="chat-feed" class="flex-1 p-4 overflow-y-auto space-y-4 chat-bg">
+          <div class="text-center my-2">
+            <span class="px-3 py-1 rounded-full bg-slate-800/90 text-slate-400 text-xs font-medium border border-slate-700">
+              Uji Coba Langsung Bot WhatsApp di Browser
+            </span>
+          </div>
+          
+          <div class="flex items-start gap-2 max-w-[85%]">
+            <div class="bg-slate-800 text-slate-100 p-3 rounded-2xl rounded-tl-none shadow border border-slate-700 text-sm">
+              <p class="font-medium text-emerald-400 text-xs mb-1">Bot WA</p>
+              Halo! Saya adalah Asisten AI WhatsApp. Kamu bisa bertanya apa saja atau mengunggah foto nota/struk belanja untuk dicatat secara otomatis! 🧾✨
+            </div>
+          </div>
+        </div>
+
+        <form id="chat-form" onsubmit="handleSendChat(event)" class="bg-slate-850 p-3 border-t border-slate-700 flex flex-col gap-2">
+          <div id="image-preview-container" class="hidden relative inline-block max-w-xs p-2 bg-slate-800 rounded-lg border border-slate-700">
+            <img id="image-preview" src="" alt="Nota Preview" class="h-20 rounded object-cover">
+            <button type="button" onclick="clearSelectedImage()" class="absolute -top-2 -right-2 w-6 h-6 bg-rose-500 text-white rounded-full text-xs flex items-center justify-center shadow">
+              &times;
+            </button>
+            <span class="text-xs text-slate-300 block mt-1">Nota siap diproses OCR</span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <label class="p-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 cursor-pointer transition flex items-center justify-center" title="Unggah Foto Nota">
+              <i class="fa-solid fa-paperclip text-lg"></i>
+              <input type="file" id="file-input" accept="image/*" onchange="handleFileSelect(event)" class="hidden">
+            </label>
+
+            <input type="text" id="chat-input" placeholder="Ketik pesan atau caption nota..." class="flex-1 bg-slate-900 text-slate-100 placeholder-slate-500 text-sm px-4 py-2.5 rounded-xl border border-slate-700 focus:outline-none focus:border-emerald-500">
+
+            <button type="submit" id="send-btn" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm rounded-xl transition flex items-center gap-2">
+              <span>Kirim</span>
+              <i class="fa-solid fa-paper-plane"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div class="space-y-6">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-3">
+          <h3 class="font-bold text-base text-white flex items-center gap-2">
+            <i class="fa-solid fa-user-gear text-emerald-400"></i>
+            <span>Profil Pengirim Simulasi</span>
+          </h3>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Nama Pengguna Simulasi</label>
+            <input type="text" id="sim-name" value="Budi Perkasa" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Nomor WhatsApp JID</label>
+            <input type="text" id="sim-jid" value="628123456789@s.whatsapp.net" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-300">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content 2: Scheduled Daily Messaging (Alur Chat Harian) -->
+    <div id="tab-scheduler" class="tab-content hidden flex-1 space-y-6">
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-6">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-700 pb-4">
+          <div>
+            <h3 class="font-bold text-lg text-white flex items-center gap-2">
+              <i class="fa-solid fa-clock text-emerald-400"></i>
+              <span>Alur Pengiriman Pesan WhatsApp Harian Otomatis</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Konfigurasi pesan yang akan dikirim secara otomatis setiap hari ke nomor-nomor target pilihan Anda.</p>
+          </div>
+
+          <button onclick="testTriggerDailyMessage()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-xl transition flex items-center gap-1.5">
+            <i class="fa-solid fa-paper-plane"></i> Uji Kirim Pesan Sekarang
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Status Pengiriman Harian</label>
+              <select id="sch-active" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
+                <option value="true">Aktif 🟢 (Kirim Pesan Setiap Hari)</option>
+                <option value="false">Nonaktif 🔴</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Waktu Pengiriman Harian (Jam : Menit)</label>
+              <input type="time" id="sch-time" value="08:00" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-xs text-slate-100 font-mono">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Daftar Nomor WhatsApp Target (Satu nomor per baris, contoh: 628123456789)</label>
+              <textarea id="sch-targets" rows="4" placeholder="628123456789&#10;628987654321" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 font-mono"></textarea>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Template Isi Pesan Harian</label>
+              <textarea id="sch-template" rows="8" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 font-mono">Selamat pagi! ☀️
+Hari ini tanggal {tanggal}.
+
+Ringkasan Sistem Bot WA:
+• Total kontak aktif: {total_kontak}
+• Total transaksi struk tercatat: {total_transaksi}
+
+Bot WhatsApp Anda beroperasi normal dan siap melayani pelanggan hari ini! 🚀</textarea>
+              <p class="text-[11px] text-slate-400 mt-1">Variabel otomatis: <code class="text-emerald-400">{tanggal}</code>, <code class="text-emerald-400">{total_kontak}</code>, <code class="text-emerald-400">{total_transaksi}</code></p>
+            </div>
+          </div>
+        </div>
+
+        <button onclick="saveScheduleConfig()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm rounded-xl transition flex items-center gap-2">
+          <i class="fa-solid fa-floppy-disk"></i>
+          <span>Simpan Pengaturan Pesan Harian</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab Content 3: Dynamic Dataset & Knowledge Base Manager -->
+    <div id="tab-dataset" class="tab-content hidden flex-1 space-y-6">
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-6">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-700 pb-4">
+          <div>
+            <h3 class="font-bold text-lg text-white flex items-center gap-2">
+              <i class="fa-solid fa-database text-emerald-400"></i>
+              <span>Dataset & Pengetahuan Bot Dinamis</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Tambahkan informasi bisnis, FAQ, atau aturan khusus agar bot WhatsApp menjawab sesuai dataset ini tanpa perlu server VPS.</p>
+          </div>
+
+          <button onclick="addDatasetItem()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition flex items-center gap-1.5">
+            <i class="fa-solid fa-plus"></i> Tambah Item Dataset
+          </button>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">System Prompt / Peran Utama Bot</label>
+          <textarea id="dataset-system-prompt" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono">Kamu adalah asisten WhatsApp pribadi yang cerdas, ramah, dan solutif. Jawab pertanyaan pengguna secara efektif.</textarea>
+        </div>
+
+        <div class="space-y-3">
+          <label class="block text-xs font-semibold text-slate-300">Daftar Dataset & Pengetahuan Khusus</label>
+          <div id="dataset-items-container" class="space-y-3"></div>
+        </div>
+
+        <button onclick="saveDatasetConfig()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm rounded-xl transition flex items-center gap-2">
+          <i class="fa-solid fa-floppy-disk"></i>
+          <span>Simpan Dataset Ke Sistem</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab Content 4: Expenses Dashboard -->
+    <div id="tab-expenses" class="tab-content hidden flex-1 space-y-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+          <p class="text-xs text-slate-400 font-medium">Total Pengeluaran</p>
+          <h3 id="stat-total" class="text-2xl font-bold text-emerald-400 mt-1">Rp 0</h3>
+          <p class="text-[11px] text-slate-500 mt-1">Dari nota yang tercatat</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+          <p class="text-xs text-slate-400 font-medium">Jumlah Transaksi Struk</p>
+          <h3 id="stat-count" class="text-2xl font-bold text-white mt-1">0</h3>
+          <p class="text-[11px] text-slate-500 mt-1">Nota sukses diproses</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+          <p class="text-xs text-slate-400 font-medium">Rata-rata per Nota</p>
+          <h3 id="stat-avg" class="text-2xl font-bold text-amber-400 mt-1">Rp 0</h3>
+          <p class="text-[11px] text-slate-500 mt-1">Estimasi belanja</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+          <p class="text-xs text-slate-400 font-medium">Database Storage</p>
+          <h3 class="text-lg font-bold text-slate-200 mt-1 font-mono">Supabase / JSON</h3>
+          <p class="text-[11px] text-slate-500 mt-1">Multi-cloud sync</p>
+        </div>
+      </div>
+
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
+        <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+          <h3 class="font-bold text-base text-white flex items-center gap-2">
+            <i class="fa-solid fa-list-check text-emerald-400"></i>
+            <span>Daftar Transaksi Struk</span>
+          </h3>
+          <button onclick="fetchExpenses()" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-medium text-slate-200 transition">
+            <i class="fa-solid fa-rotate mr-1"></i> Refresh Data
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-slate-850 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-700">
+              <tr>
+                <th class="py-3 px-4">Tanggal</th>
+                <th class="py-3 px-4">Merchant / Toko</th>
+                <th class="py-3 px-4">Rincian Item</th>
+                <th class="py-3 px-4">Total Belanja</th>
+                <th class="py-3 px-4 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="expenses-table-body" class="divide-y divide-slate-700/60">
+              <tr>
+                <td colspan="5" class="py-8 text-center text-slate-500 text-xs">
+                  Belum ada data pengeluaran.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content 5: Supabase & Dynamic Config -->
+    <div id="tab-config" class="tab-content hidden flex-1 space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Supabase Cloud Storage Card -->
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4">
+          <h3 class="font-bold text-base text-white flex items-center gap-2">
+            <i class="fa-solid fa-cloud text-emerald-400"></i>
+            <span>Integrasi Supabase Database</span>
+          </h3>
+          <p class="text-xs text-slate-400">Hubungkan Supabase agar data pengeluaran, dataset, dan konfigurasi tersimpan aman di cloud secara permanen.</p>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">SUPABASE_URL</label>
+              <input type="text" id="cfg-supabase-url" placeholder="https://xyz.supabase.co" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-xs text-slate-200 font-mono">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">SUPABASE_ANON_KEY</label>
+              <input type="password" id="cfg-supabase-key" placeholder="eyJhbGciOi..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-xs text-slate-200 font-mono">
+              <span id="cfg-supabase-status" class="text-[11px] text-slate-500 mt-1 block"></span>
+            </div>
+          </div>
+
+          <button onclick="saveSupabaseConfig()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl transition">
+            Simpan Koneksi Supabase
+          </button>
+        </div>
+
+        <!-- API Key Manager Card -->
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4">
+          <h3 class="font-bold text-base text-white flex items-center gap-2">
+            <i class="fa-solid fa-key text-emerald-400"></i>
+            <span>Pengaturan API Key Dinamis (Groq / Gemini)</span>
+          </h3>
+          <p class="text-xs text-slate-400">Masukkan API key Groq atau Google Gemini Anda di sini.</p>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">GROQ_API_KEY</label>
+              <input type="password" id="cfg-groq-key" placeholder="gsk_..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-xs text-slate-200 font-mono">
+              <span id="cfg-groq-status" class="text-[11px] text-slate-500 mt-1 block"></span>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">GEMINI_API_KEY</label>
+              <input type="password" id="cfg-gemini-key" placeholder="AIzaSy..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-xs text-slate-200 font-mono">
+              <span id="cfg-gemini-status" class="text-[11px] text-slate-500 mt-1 block"></span>
+            </div>
+          </div>
+
+          <button onclick="saveApiKeysConfig()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl transition">
+            Simpan API Keys
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Tab Content 6: Render Deployment Guide -->
+    <div id="tab-render" class="tab-content hidden flex-1 space-y-6">
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-6">
+        <div class="border-b border-slate-700 pb-4">
+          <h3 class="font-bold text-lg text-white flex items-center gap-2">
+            <i class="fa-solid fa-rocket text-amber-400"></i>
+            <span>Panduan Deploy 24/7 Gratis Ke Render.com</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">Ikuti 4 langkah sederhana berikut agar bot WhatsApp Anda online 24 jam nonstop gratis tanpa server VPS sendiri!</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-slate-300">
+          <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2">
+            <h4 class="font-bold text-sm text-emerald-400">Langkah 1: Hubungkan ke GitHub</h4>
+            <p>Unggah seluruh file repository ini ke akun GitHub pribadi Anda.</p>
+          </div>
+
+          <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2">
+            <h4 class="font-bold text-sm text-emerald-400">Langkah 2: Buat Web Service di Render</h4>
+            <p>Buka <a href="https://dashboard.render.com" target="_blank" class="text-emerald-400 underline">dashboard.render.com</a> &rarr; Klik <b>New +</b> &rarr; Pilih <b>Web Service</b> &rarr; Hubungkan repository GitHub Anda.</p>
+          </div>
+
+          <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2">
+            <h4 class="font-bold text-sm text-emerald-400">Langkah 3: Setting Command Render</h4>
+            <ul class="list-disc list-inside space-y-1 font-mono text-[11px] text-slate-200">
+              <li><b>Runtime:</b> Node</li>
+              <li><b>Build Command:</b> npm install</li>
+              <li><b>Start Command:</b> npm run start</li>
+            </ul>
+          </div>
+
+          <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2">
+            <h4 class="font-bold text-sm text-emerald-400">Langkah 4: Tautkan WhatsApp</h4>
+            <p>Setelah Render selesai membangun aplikasi, buka URL Render Anda dan masukkan <b>Kode Pairing OTP</b> untuk menghubungkan bot WhatsApp Anda secara online!</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="bg-slate-800 border-t border-slate-700 py-4 px-6 text-center text-xs text-slate-500">
+    WA Bot, Scheduler & Supabase Engine • Deployment Ready
+  </footer>
+
+  <script>
+    let selectedImageFile = null;
+    let datasetItems = [];
+
+    function showToast(message, isError = false) {
+      let toastContainer = document.getElementById('toast-container');
+      if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none';
+        document.body.appendChild(toastContainer);
+      }
+
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto px-4 py-3 rounded-xl shadow-xl text-xs font-semibold flex items-center gap-2 border transition-all duration-300 transform translate-y-2 opacity-0 ${
+        isError 
+          ? 'bg-rose-900/90 text-rose-200 border-rose-500/50' 
+          : 'bg-emerald-900/90 text-emerald-200 border-emerald-500/50'
+      }`;
+      toast.innerHTML = `<i class="fa-solid ${isError ? 'fa-circle-exclamation text-rose-400' : 'fa-circle-check text-emerald-400'}"></i><span>${message}</span>`;
+      
+      toastContainer.appendChild(toast);
+      setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(el => {
+        el.classList.remove('active', 'border-emerald-400', 'text-emerald-400');
+        el.classList.add('border-transparent', 'text-slate-400');
+      });
+
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+      activeBtn.classList.add('active', 'border-emerald-400', 'text-emerald-400');
+
+      if (tabName === 'expenses') fetchExpenses();
+      if (tabName === 'dataset' || tabName === 'config' || tabName === 'scheduler') fetchConfig();
+    }
+
+    function setConnectMethod(method) {
+      const btnOtp = document.getElementById('btn-method-otp');
+      const btnQr = document.getElementById('btn-method-qr');
+      const secOtp = document.getElementById('method-otp-section');
+      const secQr = document.getElementById('method-qr-section');
+
+      if (method === 'otp') {
+        btnOtp.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white transition';
+        btnQr.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition';
+        secOtp.classList.remove('hidden');
+        secQr.classList.add('hidden');
+      } else {
+        btnQr.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white transition';
+        btnOtp.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition';
+        secQr.classList.remove('hidden');
+        secOtp.classList.add('hidden');
+      }
+    }
+
+    async function requestPairingOTP() {
+      const input = document.getElementById('phone-number-input');
+      const rawNumber = input.value.trim();
+
+      if (!rawNumber) {
+        showToast('Silakan masukkan nomor WhatsApp HP Anda.', true);
+        return;
+      }
+
+      const btn = document.getElementById('btn-request-otp');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> Memohon...';
+
+      try {
+        const res = await fetch('/api/wa/request-pairing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phoneNumber: rawNumber })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.pairingCode) {
+          document.getElementById('otp-display').innerText = data.formattedCode || data.pairingCode;
+          showToast(`Kode OTP Pairing berhasil dibuat: ${data.formattedCode}`);
+        } else {
+          showToast(`Gagal meminta OTP: ${data.error || 'Terjadi kesalahan'}`, true);
+        }
+      } catch (err) {
+        showToast('Terjadi kesalahan jaringan saat meminta kode OTP.', true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Minta Kode OTP</span><i class="fa-solid fa-paper-plane"></i>';
+      }
+    }
+
+    async function resetWASession() {
+      try {
+        const res = await fetch('/api/wa/reset-session', { method: 'POST' });
+        if (res.ok) {
+          document.getElementById('otp-display').innerText = '---- ----';
+          showToast('Sesi WhatsApp berhasil dibersihkan! Silakan klik Minta Kode OTP.');
+        }
+      } catch (err) {
+        showToast('Gagal mereset sesi WhatsApp.', true);
+      }
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+
+        document.getElementById('model-badge').innerText = data.model || 'Groq/Gemini';
+        
+        const badge = document.getElementById('status-badge');
+        const statusText = document.getElementById('status-text');
+
+        if (data.connectionStatus === 'connected') {
+          badge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-medium border border-emerald-500/30';
+          statusText.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> WA Terhubung';
+        } else if (data.qrCodeDataUrl) {
+          badge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-medium border border-amber-500/30';
+          statusText.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span> Scan / OTP Ready';
+          document.getElementById('qr-container').innerHTML = `<img src="${data.qrCodeDataUrl}" alt="WhatsApp QR Code" class="w-44 h-44 rounded">`;
+        }
+
+        if (data.pairingCode) {
+          document.getElementById('otp-display').innerText = data.pairingCode.match(/.{1,4}/g)?.join('-') || data.pairingCode;
+        }
+      } catch (err) {
+        console.error('Fetch status error:', err);
+      }
+    }
+
+    async function fetchConfig() {
+      try {
+        const res = await fetch('/api/config');
+        const data = await res.json();
+
+        if (data.pesanSistem?.systemPrompt) {
+          document.getElementById('dataset-system-prompt').value = data.pesanSistem.systemPrompt;
+        }
+
+        if (data.groqApiKeyMasked) {
+          document.getElementById('cfg-groq-status').innerText = `Terisi: ${data.groqApiKeyMasked}`;
+        }
+        if (data.geminiApiKeyMasked) {
+          document.getElementById('cfg-gemini-status').innerText = `Terisi: ${data.geminiApiKeyMasked}`;
+        }
+
+        if (data.supabaseUrl) {
+          document.getElementById('cfg-supabase-url').value = data.supabaseUrl;
+        }
+        if (data.supabaseAnonKeyMasked) {
+          document.getElementById('cfg-supabase-status').innerText = `Terisi: ${data.supabaseAnonKeyMasked}`;
+        }
+
+        if (data.jadwalHarian) {
+          document.getElementById('sch-active').value = String(data.jadwalHarian.aktif);
+          document.getElementById('sch-time').value = data.jadwalHarian.jam || '08:00';
+          document.getElementById('sch-targets').value = (data.jadwalHarian.targetNomor || []).join('\n');
+          document.getElementById('sch-template').value = data.jadwalHarian.templatePesan || '';
+        }
+
+        datasetItems = data.pesanSistem?.knowledgeBase || [];
+        renderDatasetItems();
+      } catch (err) {
+        console.error('Fetch config error:', err);
+      }
+    }
+
+    function renderDatasetItems() {
+      const container = document.getElementById('dataset-items-container');
+      if (datasetItems.length === 0) {
+        container.innerHTML = `<div class="p-4 bg-slate-900 border border-slate-700/60 rounded-xl text-xs text-slate-500 text-center">Belum ada item dataset. Klik "Tambah Item Dataset" untuk menambah pengetahuan bot.</div>`;
+        return;
+      }
+
+      container.innerHTML = datasetItems.map((item, index) => `
+        <div class="bg-slate-900 border border-slate-700 rounded-xl p-3 flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+          <input type="text" value="${escapeHtml(item.deskripsi || '')}" onchange="updateDatasetItem(${index}, 'deskripsi', this.value)" placeholder="Judul / Kata Kunci" class="w-full sm:w-1/3 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100">
+          <input type="text" value="${escapeHtml(item.konten || '')}" onchange="updateDatasetItem(${index}, 'konten', this.value)" placeholder="Informasi / Pengetahuan" class="w-full sm:w-2/3 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100">
+          <button onclick="removeDatasetItem(${index})" class="text-rose-400 hover:text-rose-300 p-1.5 rounded hover:bg-slate-800 transition">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    function addDatasetItem() {
+      datasetItems.push({ deskripsi: '', konten: '' });
+      renderDatasetItems();
+    }
+
+    function updateDatasetItem(index, key, val) {
+      if (datasetItems[index]) datasetItems[index][key] = val;
+    }
+
+    function removeDatasetItem(index) {
+      datasetItems.splice(index, 1);
+      renderDatasetItems();
+    }
+
+    async function saveDatasetConfig() {
+      const sysPrompt = document.getElementById('dataset-system-prompt').value;
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemPrompt: sysPrompt,
+            knowledgeBase: datasetItems
+          })
+        });
+        if (res.ok) showToast('Dataset dan pengetahuan bot berhasil disimpan!');
+      } catch (err) {
+        showToast('Gagal menyimpan dataset.', true);
+      }
+    }
+
+    async function saveScheduleConfig() {
+      const aktif = document.getElementById('sch-active').value === 'true';
+      const jam = document.getElementById('sch-time').value;
+      const targets = document.getElementById('sch-targets').value.split('\n').map(s => s.trim()).filter(Boolean);
+      const templatePesan = document.getElementById('sch-template').value;
+
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jadwalHarian: { aktif, jam, targetNomor: targets, templatePesan }
+          })
+        });
+        if (res.ok) showToast('Pengaturan pesan harian berhasil disimpan!');
+      } catch (err) {
+        showToast('Gagal menyimpan jadwal harian.', true);
+      }
+    }
+
+    async function testTriggerDailyMessage() {
+      try {
+        const res = await fetch('/api/scheduler/test-run', { method: 'POST' });
+        if (res.ok) showToast('Pesan harian berhasil dipicu dan dikirim ke target!');
+        else showToast('Gagal mengirim pesan harian.', true);
+      } catch (err) {
+        showToast('Terjadi kesalahan koneksi.', true);
+      }
+    }
+
+    async function saveSupabaseConfig() {
+      const sUrl = document.getElementById('cfg-supabase-url').value.trim();
+      const sKey = document.getElementById('cfg-supabase-key').value.trim();
+
+      const payload = {};
+      if (sUrl) payload.supabaseUrl = sUrl;
+      if (sKey) payload.supabaseAnonKey = sKey;
+
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          showToast('Pengaturan Supabase berhasil diperbarui!');
+          fetchConfig();
+        }
+      } catch (err) {
+        showToast('Gagal menyimpan koneksi Supabase.', true);
+      }
+    }
+
+    async function saveApiKeysConfig() {
+      const groqKey = document.getElementById('cfg-groq-key').value.trim();
+      const geminiKey = document.getElementById('cfg-gemini-key').value.trim();
+
+      const payload = {};
+      if (groqKey) payload.groqApiKey = groqKey;
+      if (geminiKey) payload.geminiApiKey = geminiKey;
+
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          showToast('API Keys berhasil diperbarui!');
+          fetchConfig();
+        }
+      } catch (err) {
+        showToast('Gagal menyimpan API Keys.', true);
+      }
+    }
+
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      selectedImageFile = file;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        document.getElementById('image-preview').src = evt.target.result;
+        document.getElementById('image-preview-container').classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearSelectedImage() {
+      selectedImageFile = null;
+      document.getElementById('file-input').value = '';
+      document.getElementById('image-preview-container').classList.add('hidden');
+    }
+
+    function appendMessage(sender, text, isUser = false) {
+      const chatFeed = document.getElementById('chat-feed');
+      const msgDiv = document.createElement('div');
+
+      if (isUser) {
+        msgDiv.className = 'flex items-start justify-end gap-2 max-w-[85%] ml-auto';
+        msgDiv.innerHTML = `
+          <div class="bg-emerald-700 text-white p-3 rounded-2xl rounded-tr-none shadow text-sm">
+            <p class="font-medium text-emerald-200 text-xs mb-1">${sender}</p>
+            ${text ? `<p class="whitespace-pre-wrap">${escapeHtml(text)}</p>` : ''}
+          </div>
+        `;
+      } else {
+        msgDiv.className = 'flex items-start gap-2 max-w-[85%]';
+        msgDiv.innerHTML = `
+          <div class="bg-slate-800 text-slate-100 p-3 rounded-2xl rounded-tl-none shadow border border-slate-700 text-sm">
+            <p class="font-medium text-emerald-400 text-xs mb-1">${sender}</p>
+            <p class="whitespace-pre-wrap">${text}</p>
+          </div>
+        `;
+      }
+
+      chatFeed.appendChild(msgDiv);
+      chatFeed.scrollTop = chatFeed.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
+
+    function clearChatLog() {
+      document.getElementById('chat-feed').innerHTML = `
+        <div class="text-center my-2">
+          <span class="px-3 py-1 rounded-full bg-slate-800/90 text-slate-400 text-xs font-medium border border-slate-700">
+            Riwayat Chat Dibersihkan
+          </span>
+        </div>
+      `;
+    }
+
+    async function handleSendChat(e) {
+      e.preventDefault();
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      const simName = document.getElementById('sim-name').value || 'Pengguna Test';
+      const simJid = document.getElementById('sim-jid').value || 'user@s.whatsapp.net';
+
+      if (!text && !selectedImageFile) return;
+
+      const hasImage = Boolean(selectedImageFile);
+      const fileToSend = selectedImageFile;
+
+      input.value = '';
+      clearSelectedImage();
+
+      appendMessage(simName, text || (hasImage ? '[Foto Nota Belanja]' : ''), true);
+
+      const typingInd = document.getElementById('typing-indicator');
+      typingInd.innerText = 'Bot sedang mengetik...';
+      typingInd.className = 'text-xs text-amber-400 font-medium animate-pulse';
+
+      try {
+        const formData = new FormData();
+        formData.append('senderJid', simJid);
+        formData.append('senderName', simName);
+        formData.append('text', text);
+        if (hasImage) {
+          formData.append('image', fileToSend);
+        }
+
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+        appendMessage('Bot WA', data.reply || 'Tidak ada balasan.');
+
+        fetchExpenses();
+      } catch (err) {
+        console.error('Send error:', err);
+        appendMessage('Bot WA', '⚠️ Gagal mengirim pesan ke bot server.');
+      } finally {
+        typingInd.innerText = 'Online';
+        typingInd.className = 'text-xs text-emerald-400 font-medium';
+      }
+    }
+
+    async function fetchExpenses() {
+      try {
+        const res = await fetch('/api/expenses');
+        const data = await res.json();
+        const items = data.expenses || [];
+
+        document.getElementById('expense-count-badge').innerText = items.length;
+        document.getElementById('stat-count').innerText = items.length;
+
+        const totalSum = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+        document.getElementById('stat-total').innerText = `Rp ${totalSum.toLocaleString('id-ID')}`;
+
+        const avg = items.length > 0 ? Math.round(totalSum / items.length) : 0;
+        document.getElementById('stat-avg').innerText = `Rp ${avg.toLocaleString('id-ID')}`;
+
+        const tbody = document.getElementById('expenses-table-body');
+        if (items.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="5" class="py-8 text-center text-slate-500 text-xs">
+                Belum ada data pengeluaran.
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = items.map(trx => {
+          const itemListHtml = (trx.items && trx.items.length > 0)
+            ? trx.items.map(i => `<span class="inline-block bg-slate-900 border border-slate-700 px-2 py-0.5 rounded text-[11px] text-slate-300 mr-1 mb-1">${escapeHtml(i.nama)} (${i.qty}x)</span>`).join('')
+            : '<span class="text-slate-500 italic text-xs">Tanpa item</span>';
+
+          return `
+            <tr class="hover:bg-slate-750 transition">
+              <td class="py-3.5 px-4 font-mono text-xs text-slate-300 whitespace-nowrap">${escapeHtml(trx.tanggal || '-')}</td>
+              <td class="py-3.5 px-4 font-semibold text-white">${escapeHtml(trx.merchant || 'Toko')}</td>
+              <td class="py-3.5 px-4">${itemListHtml}</td>
+              <td class="py-3.5 px-4 font-bold text-emerald-400 whitespace-nowrap">Rp ${Number(trx.total || 0).toLocaleString('id-ID')}</td>
+              <td class="py-3.5 px-4 text-right">
+                <button onclick="deleteExpense('${trx.id}')" class="text-rose-400 hover:text-rose-300 p-1.5 rounded hover:bg-slate-700 transition" title="Hapus Transaksi">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Fetch expenses error:', err);
+      }
+    }
+
+    async function deleteExpense(id) {
+      try {
+        await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+        showToast('Transaksi berhasil dihapus');
+        fetchExpenses();
+      } catch (err) {
+        showToast('Gagal menghapus transaksi', true);
+      }
+    }
+
+    // Initial load
+    fetchStatus();
+    fetchConfig();
+    setInterval(fetchStatus, 5000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "WA Bot & Receipt Tracker",
+  "description": "WhatsApp AI Assistant and Receipt OCR Expense Tracker",
+  "request_capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
